@@ -1,6 +1,6 @@
 "use client"
 
-import { useState } from "react"
+import { useState, useEffect } from "react"
 import Link from "next/link"
 import { Badge } from "./ui/Badge"
 import { GradeType, MOCK_STATS, MOCK_REVIEWS, MOCK_INSTRUCTORS } from "@/lib/constants"
@@ -19,6 +19,8 @@ import {
   FileText,
   Check,
   Send,
+  CheckCircle,
+  X,
 } from "lucide-react"
 
 interface CourseData {
@@ -38,25 +40,61 @@ interface CourseData {
   hasGrades: boolean
 }
 
+interface ReviewData {
+  id: string
+  author: string
+  term: string
+  instructor: string
+  title: string | null
+  date: string
+  gradeReceived: string
+  ratings: {
+    content: string
+    teaching: string
+    grading: string
+    workload: string
+  }
+  dimensionComments: {
+    content: string
+    teaching: string
+    grading: string
+    workload: string
+  }
+  assessments: string[]
+  tags: string[]
+  resourceLink: string | null
+  likes: number
+  comments: Array<{ id: string; author: string; date: string; text: string }>
+}
+
 interface CourseDetailProps {
   course: CourseData
+  reviews?: ReviewData[]
+  showSuccessToast?: boolean
 }
 
 const getStatColor = (grade: GradeType | string) => {
   switch (grade) {
     case GradeType.A:
+    case "A":
       return "bg-emerald-500"
     case GradeType.AB:
+    case "AB":
       return "bg-emerald-400"
     case GradeType.B:
+    case "B":
       return "bg-blue-500"
     case GradeType.BC:
+    case "BC":
       return "bg-blue-400"
     case GradeType.C:
+    case "C":
       return "bg-amber-400"
     case GradeType.D:
+    case "D":
       return "bg-orange-400"
     case GradeType.F:
+    case "F":
       return "bg-red-500"
     default:
       return "bg-slate-300"
@@ -66,35 +104,54 @@ const getStatColor = (grade: GradeType | string) => {
 const getStatWidth = (grade: GradeType | string) => {
   switch (grade) {
     case GradeType.A:
+    case "A":
       return "100%"
     case GradeType.AB:
+    case "AB":
       return "90%"
     case GradeType.B:
+    case "B":
       return "80%"
     case GradeType.BC:
+    case "BC":
       return "70%"
     case GradeType.C:
+    case "C":
       return "60%"
     case GradeType.D:
+    case "D":
       return "40%"
     case GradeType.F:
+    case "F":
       return "20%"
     default:
       return "50%"
   }
 }
 
-export function CourseDetail({ course }: CourseDetailProps) {
+export function CourseDetail({ course, reviews: propReviews = [], showSuccessToast = false }: CourseDetailProps) {
   const [showAllInstructors, setShowAllInstructors] = useState(false)
   const [expandedComments, setExpandedComments] = useState<Set<string>>(new Set())
   const [commentInputs, setCommentInputs] = useState<Record<string, string>>({})
+  const [showToast, setShowToast] = useState(showSuccessToast)
 
-  // Use MOCK data when DB has no reviews/grades
-  const stats = course.hasReviews
-    ? MOCK_STATS // Would come from DB aggregation
+  // Hide toast after 5 seconds
+  useEffect(() => {
+    if (showToast) {
+      const timer = setTimeout(() => setShowToast(false), 5000)
+      return () => clearTimeout(timer)
+    }
+  }, [showToast])
+
+  // Hybrid data strategy: use real reviews if available, otherwise MOCK
+  const hasRealReviews = propReviews.length > 0
+  const reviews = hasRealReviews ? propReviews : MOCK_REVIEWS
+
+  // Calculate stats from real reviews or use mock
+  const stats = hasRealReviews
+    ? calculateStats(propReviews)
     : MOCK_STATS
 
-  const reviews = course.hasReviews ? MOCK_REVIEWS : MOCK_REVIEWS
   const instructors =
     course.instructors.length > 0 ? course.instructors : MOCK_INSTRUCTORS
 
@@ -121,6 +178,24 @@ export function CourseDetail({ course }: CourseDetailProps) {
 
   return (
     <div className="space-y-8">
+      {/* Success Toast */}
+      {showToast && (
+        <div className="fixed top-20 right-4 z-50 animate-slide-in">
+          <div className="flex items-center gap-3 px-4 py-3 bg-emerald-50 border border-emerald-200 rounded-lg shadow-lg">
+            <CheckCircle size={20} className="text-emerald-600" />
+            <span className="text-sm font-medium text-emerald-800">
+              Review submitted successfully!
+            </span>
+            <button
+              onClick={() => setShowToast(false)}
+              className="text-emerald-600 hover:text-emerald-800"
+            >
+              <X size={16} />
+            </button>
+          </div>
+        </div>
+      )}
+
       {/* Back Nav */}
       <Link
         href="/courses"
@@ -213,7 +288,7 @@ export function CourseDetail({ course }: CourseDetailProps) {
                     {course.prerequisiteCodes.length === 0 ? (
                       <span className="text-xs text-slate-400 italic px-2">None</span>
                     ) : (
-                      course.prerequisiteCodes.map((code, i) => (
+                      course.prerequisiteCodes.map((code) => (
                         <Link
                           key={code}
                           href={`/courses/${encodeURIComponent(code)}`}
@@ -279,10 +354,13 @@ export function CourseDetail({ course }: CourseDetailProps) {
 
           {/* Right Sidebar of Header */}
           <div className="flex flex-col items-stretch gap-4 w-full lg:w-64 flex-shrink-0">
-            <button className="w-full px-4 py-3 bg-[#c5050c] text-white text-sm font-bold rounded-lg hover:bg-[#9b0000] transition-all shadow-lg shadow-red-100 active:scale-95 flex items-center justify-center gap-2">
+            <Link
+              href={`/courses/${encodeURIComponent(course.code)}/review`}
+              className="w-full px-4 py-3 bg-[#c5050c] text-white text-sm font-bold rounded-lg hover:bg-[#9b0000] transition-all shadow-lg shadow-red-100 active:scale-95 flex items-center justify-center gap-2"
+            >
               <FileText size={16} />
               Write a Review
-            </button>
+            </Link>
 
             <div className="bg-white border border-slate-200 rounded-lg p-4 shadow-sm">
               <div className="text-xs font-bold text-slate-400 uppercase tracking-wide mb-3 flex items-center gap-1.5">
@@ -303,7 +381,7 @@ export function CourseDetail({ course }: CourseDetailProps) {
           </div>
         </div>
 
-        {/* Course Stats Grid - MOCK DATA */}
+        {/* Course Stats Grid */}
         <div className="grid grid-cols-2 md:grid-cols-4 gap-4 mt-8 border-t border-slate-100 pt-8">
           {[
             { label: "Content Quality", score: stats.contentScore },
@@ -331,18 +409,20 @@ export function CourseDetail({ course }: CourseDetailProps) {
           ))}
         </div>
 
-        {!course.hasReviews && (
+        {!hasRealReviews && (
           <div className="mt-4 p-3 bg-amber-50 border border-amber-200 rounded-lg text-xs text-amber-700">
             <strong>Demo Mode:</strong> Showing sample ratings. Be the first to review this course!
           </div>
         )}
       </div>
 
-      {/* Reviews List - MOCK DATA */}
+      {/* Reviews List */}
       <div className="space-y-6">
         <div className="flex items-center justify-between">
           <h2 className="text-xl font-bold text-slate-900">Student Reviews</h2>
-          <span className="text-sm text-slate-500">{reviews.length} reviews</span>
+          <span className="text-sm text-slate-500">
+            {hasRealReviews ? `${reviews.length} reviews` : "Sample reviews"}
+          </span>
         </div>
 
         {reviews.map((review) => (
@@ -375,7 +455,7 @@ export function CourseDetail({ course }: CourseDetailProps) {
                   <div className="text-xs text-slate-400 uppercase font-semibold mb-1">
                     Grade Rec&apos;d
                   </div>
-                  <Badge grade={review.gradeReceived} variant="subtle" />
+                  <Badge grade={review.gradeReceived as GradeType} variant="subtle" />
                 </div>
               </div>
 
@@ -421,7 +501,7 @@ export function CourseDetail({ course }: CourseDetailProps) {
 
                 {/* Tags & Assessments */}
                 <div className="flex flex-wrap gap-2 mb-5">
-                  {review.tags.map((tag) => (
+                  {review.tags?.map((tag) => (
                     <span
                       key={tag}
                       className="px-2.5 py-1 bg-slate-100 text-slate-600 text-[10px] rounded-full font-medium border border-slate-200"
@@ -443,20 +523,22 @@ export function CourseDetail({ course }: CourseDetailProps) {
                 {/* Detailed Comments per Dimension */}
                 {review.dimensionComments && (
                   <div className="grid grid-cols-1 lg:grid-cols-2 gap-4 mb-5">
-                    {Object.entries(review.dimensionComments).map(([key, text]) => (
-                      <div
-                        key={key}
-                        className="bg-slate-50/80 p-3.5 rounded-lg border border-slate-100 hover:border-slate-200 transition-colors"
-                      >
-                        <h5 className="text-[10px] font-bold text-slate-400 uppercase mb-2 flex items-center gap-1">
-                          <div
-                            className={`w-1.5 h-1.5 rounded-full ${getStatColor(review.ratings[key as keyof typeof review.ratings])}`}
-                          ></div>
-                          {key}
-                        </h5>
-                        <p className="text-sm text-slate-700 leading-relaxed">{text}</p>
-                      </div>
-                    ))}
+                    {Object.entries(review.dimensionComments)
+                      .filter(([, text]) => text && text.length > 0)
+                      .map(([key, text]) => (
+                        <div
+                          key={key}
+                          className="bg-slate-50/80 p-3.5 rounded-lg border border-slate-100 hover:border-slate-200 transition-colors"
+                        >
+                          <h5 className="text-[10px] font-bold text-slate-400 uppercase mb-2 flex items-center gap-1">
+                            <div
+                              className={`w-1.5 h-1.5 rounded-full ${getStatColor(review.ratings[key as keyof typeof review.ratings])}`}
+                            ></div>
+                            {key}
+                          </h5>
+                          <p className="text-sm text-slate-700 leading-relaxed">{text}</p>
+                        </div>
+                      ))}
                   </div>
                 )}
 
@@ -473,7 +555,7 @@ export function CourseDetail({ course }: CourseDetailProps) {
                       className={`flex items-center gap-1.5 transition-colors ${expandedComments.has(review.id) ? "text-blue-600" : "hover:text-blue-600"}`}
                     >
                       <MessageSquare size={14} />
-                      <span>{review.comments.length} Comments</span>
+                      <span>{review.comments?.length || 0} Comments</span>
                       {expandedComments.has(review.id) ? (
                         <ChevronUp size={12} />
                       ) : (
@@ -487,7 +569,7 @@ export function CourseDetail({ course }: CourseDetailProps) {
                 {expandedComments.has(review.id) && (
                   <div className="mt-4 pt-4 border-t border-slate-100 bg-slate-50/50 -mx-5 -mb-5 px-5 pb-5 animate-fade-in">
                     <div className="space-y-3 mb-4">
-                      {review.comments.length > 0 ? (
+                      {review.comments && review.comments.length > 0 ? (
                         review.comments.map((comment) => (
                           <div key={comment.id} className="flex gap-3">
                             <div className="w-6 h-6 bg-white border border-slate-200 rounded-full flex items-center justify-center text-[10px] font-bold text-slate-500 flex-shrink-0">
@@ -541,17 +623,66 @@ export function CourseDetail({ course }: CourseDetailProps) {
           </div>
         ))}
 
-        {!course.hasReviews && (
+        {!hasRealReviews && (
           <div className="text-center py-8 bg-slate-50 rounded-xl border border-slate-200 border-dashed">
             <p className="text-sm text-slate-500 mb-2">
               These are sample reviews for demonstration.
             </p>
-            <p className="text-xs text-slate-400">
+            <p className="text-xs text-slate-400 mb-4">
               Be the first to share your experience with this course!
             </p>
+            <Link
+              href={`/courses/${encodeURIComponent(course.code)}/review`}
+              className="inline-flex items-center gap-2 px-4 py-2 bg-[#c5050c] text-white text-sm font-medium rounded-lg hover:bg-[#9b0000] transition-colors"
+            >
+              <FileText size={14} />
+              Write the First Review
+            </Link>
           </div>
         )}
       </div>
     </div>
   )
+}
+
+// Helper function to calculate aggregate stats from reviews
+function calculateStats(reviews: ReviewData[]) {
+  if (reviews.length === 0) return MOCK_STATS
+
+  const gradeToNumber = (grade: string): number => {
+    switch (grade) {
+      case "A": return 7
+      case "AB": return 6
+      case "B": return 5
+      case "BC": return 4
+      case "C": return 3
+      case "D": return 2
+      case "F": return 1
+      default: return 4
+    }
+  }
+
+  const numberToGrade = (num: number): GradeType => {
+    if (num >= 6.5) return GradeType.A
+    if (num >= 5.5) return GradeType.AB
+    if (num >= 4.5) return GradeType.B
+    if (num >= 3.5) return GradeType.BC
+    if (num >= 2.5) return GradeType.C
+    if (num >= 1.5) return GradeType.D
+    return GradeType.F
+  }
+
+  const avgContent = reviews.reduce((sum, r) => sum + gradeToNumber(r.ratings.content), 0) / reviews.length
+  const avgTeaching = reviews.reduce((sum, r) => sum + gradeToNumber(r.ratings.teaching), 0) / reviews.length
+  const avgGrading = reviews.reduce((sum, r) => sum + gradeToNumber(r.ratings.grading), 0) / reviews.length
+  const avgWorkload = reviews.reduce((sum, r) => sum + gradeToNumber(r.ratings.workload), 0) / reviews.length
+
+  return {
+    reviewCount: reviews.length,
+    avgGrade: numberToGrade((avgContent + avgTeaching + avgGrading + avgWorkload) / 4),
+    contentScore: numberToGrade(avgContent),
+    teachingScore: numberToGrade(avgTeaching),
+    gradingScore: numberToGrade(avgGrading),
+    workloadScore: numberToGrade(avgWorkload),
+  }
 }

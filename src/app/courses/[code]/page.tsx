@@ -6,13 +6,15 @@ import { ArrowLeft } from "lucide-react"
 
 interface PageProps {
   params: Promise<{ code: string }>
+  searchParams: Promise<{ review?: string }>
 }
 
-export default async function CourseDetailPage({ params }: PageProps) {
+export default async function CourseDetailPage({ params, searchParams }: PageProps) {
   const { code } = await params
+  const { review: reviewSuccess } = await searchParams
   const decodedCode = decodeURIComponent(code)
 
-  // Fetch course with relations
+  // Fetch course with relations and full reviews
   const course = await prisma.course.findUnique({
     where: { code: decodedCode },
     include: {
@@ -26,7 +28,11 @@ export default async function CourseDetailPage({ params }: PageProps) {
         take: 10,
       },
       reviews: {
-        take: 1,
+        include: {
+          author: { select: { name: true } },
+          instructor: { select: { name: true } },
+        },
+        orderBy: { createdAt: "desc" },
       },
       gradeDistributions: {
         take: 1,
@@ -53,6 +59,38 @@ export default async function CourseDetailPage({ params }: PageProps) {
     )
   }
 
+  // Transform reviews for component
+  const reviewsData = course.reviews.map((review) => ({
+    id: review.id,
+    author: review.author?.name || "Anonymous",
+    term: review.term,
+    instructor: review.instructor?.name || "Staff",
+    title: review.title,
+    date: review.createdAt.toLocaleDateString("en-US", {
+      month: "short",
+      day: "numeric",
+      year: "numeric",
+    }),
+    gradeReceived: review.gradeReceived,
+    ratings: {
+      content: review.contentRating,
+      teaching: review.teachingRating,
+      grading: review.gradingRating,
+      workload: review.workloadRating,
+    },
+    dimensionComments: {
+      content: review.contentComment || "",
+      teaching: review.teachingComment || "",
+      grading: review.gradingComment || "",
+      workload: review.workloadComment || "",
+    },
+    assessments: review.assessments,
+    tags: [], // We don't have tags in DB yet
+    resourceLink: review.resourceLink,
+    likes: 0, // We'll implement votes later
+    comments: [], // We'll implement comments later
+  }))
+
   // Transform data for component
   const courseData = {
     code: course.code,
@@ -71,7 +109,13 @@ export default async function CourseDetailPage({ params }: PageProps) {
     hasGrades: course.gradeDistributions.length > 0,
   }
 
-  return <CourseDetail course={courseData} />
+  return (
+    <CourseDetail
+      course={courseData}
+      reviews={reviewsData}
+      showSuccessToast={reviewSuccess === "success"}
+    />
+  )
 }
 
 // Generate metadata for SEO
