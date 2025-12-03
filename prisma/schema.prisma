@@ -1,0 +1,276 @@
+// WiscFlow Database Schema
+// UW Madison Course Review & Academic Planning Platform
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+// Enums
+enum UserRole {
+  STUDENT
+  ADMIN
+}
+
+enum Grade {
+  A
+  AB
+  B
+  BC
+  C
+  D
+  F
+}
+
+// User: Must be authenticated via wisc.edu email
+model User {
+  id        String   @id @default(cuid())
+  email     String   @unique
+  name      String?
+  image     String?
+  role      UserRole @default(STUDENT)
+
+  // NextAuth.js fields
+  emailVerified DateTime?
+  accounts      Account[]
+  sessions      Session[]
+
+  // Community
+  reviews  Review[]
+  comments Comment[]
+  votes    Vote[]
+
+  // Personalization
+  savedCourses SavedCourse[]
+  transcript   StudentCourseHistory[]
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+}
+
+// NextAuth.js Account model
+model Account {
+  id                String  @id @default(cuid())
+  userId            String
+  type              String
+  provider          String
+  providerAccountId String
+  refresh_token     String? @db.Text
+  access_token      String? @db.Text
+  expires_at        Int?
+  token_type        String?
+  scope             String?
+  id_token          String? @db.Text
+  session_state     String?
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([provider, providerAccountId])
+}
+
+// NextAuth.js Session model
+model Session {
+  id           String   @id @default(cuid())
+  sessionToken String   @unique
+  userId       String
+  expires      DateTime
+  user         User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+}
+
+// NextAuth.js VerificationToken model
+model VerificationToken {
+  identifier String
+  token      String   @unique
+  expires    DateTime
+
+  @@unique([identifier, token])
+}
+
+// School: e.g., "College of Engineering"
+model School {
+  id      String   @id @default(cuid())
+  name    String   @unique
+  courses Course[]
+}
+
+// Course: The static catalog data
+model Course {
+  id          String @id @default(cuid())
+  code        String @unique // e.g. "CS 577"
+  name        String
+  description String @db.Text
+  credits     Int
+
+  // Relations
+  schoolId String
+  school   School @relation(fields: [schoolId], references: [id])
+
+  // Prereq Logic for Visualization
+  prerequisiteText String?  @db.Text // Raw text from guide.wisc.edu
+  prerequisites    Course[] @relation("CoursePrereqs")
+  prerequisiteFor  Course[] @relation("CoursePrereqs")
+
+  // Attributes for Filtering
+  breadths String[] // Array of strings: "Physical Science", etc.
+  genEds   String[] // Array of strings: "Comm A", etc.
+  level    String // "Elementary", "Intermediate", "Advanced"
+
+  reviews     Review[]
+  instructors Instructor[] @relation("CourseInstructors")
+
+  // Statistics (updated via cron/trigger)
+  avgGPA    Float? // Aggregate from GradeDistributions
+  avgRating Float? // Aggregate from Reviews
+
+  // Historical Data
+  gradeDistributions GradeDistribution[]
+
+  // User interactions
+  savedBy SavedCourse[]
+
+  // Metadata
+  lastOffered String?
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  @@index([schoolId])
+  @@index([code])
+}
+
+// Grade Distribution: Official historical data scraped from Madgrades/Registrar
+model GradeDistribution {
+  id       String @id @default(cuid())
+  courseId String
+  course   Course @relation(fields: [courseId], references: [id], onDelete: Cascade)
+  term     String // e.g. "2023-Fall"
+
+  // Counts
+  aCount  Int @default(0)
+  abCount Int @default(0)
+  bCount  Int @default(0)
+  bcCount Int @default(0)
+  cCount  Int @default(0)
+  dCount  Int @default(0)
+  fCount  Int @default(0)
+
+  totalGraded Int
+  avgGPA      Float
+
+  @@unique([courseId, term])
+  @@index([courseId])
+}
+
+// Review: User generated content (NO SEED DATA ALLOWED)
+model Review {
+  id String @id @default(cuid())
+
+  // Core Metadata
+  term          String // e.g., "Fall 2024"
+  title         String? // Short review title
+  gradeReceived Grade // Enum: A, AB, B, BC...
+
+  // MANDATORY Grading Dimensions (A-F Grade Scale)
+  contentRating  Grade
+  teachingRating Grade
+  gradingRating  Grade
+  workloadRating Grade
+
+  // Specific Text Comments per Dimension
+  contentComment  String? @db.Text
+  teachingComment String? @db.Text
+  gradingComment  String? @db.Text
+  workloadComment String? @db.Text
+
+  // Metadata
+  assessments String[] // Array: ["Midterm", "Final", "Essay"]
+  tags        String[]
+
+  // Resources (Optional)
+  resourceLink String? // Optional URL to Google Drive/Box for course materials
+
+  // Relations
+  instructorId String
+  instructor   Instructor @relation(fields: [instructorId], references: [id])
+  courseId     String
+  course       Course     @relation(fields: [courseId], references: [id])
+  authorId     String
+  author       User       @relation(fields: [authorId], references: [id])
+
+  votes    Vote[]
+  comments Comment[]
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([courseId])
+  @@index([authorId])
+  @@index([instructorId])
+}
+
+model Comment {
+  id   String @id @default(cuid())
+  text String @db.Text
+
+  // Relations
+  authorId String
+  author   User   @relation(fields: [authorId], references: [id])
+  reviewId String
+  review   Review @relation(fields: [reviewId], references: [id], onDelete: Cascade)
+
+  createdAt DateTime @default(now())
+
+  @@index([reviewId])
+}
+
+model Vote {
+  id       String @id @default(cuid())
+  userId   String
+  user     User   @relation(fields: [userId], references: [id])
+  reviewId String
+  review   Review @relation(fields: [reviewId], references: [id], onDelete: Cascade)
+
+  createdAt DateTime @default(now())
+
+  @@unique([userId, reviewId])
+  @@index([reviewId])
+}
+
+model Instructor {
+  id      String   @id @default(cuid())
+  name    String   @unique
+  courses Course[] @relation("CourseInstructors")
+  reviews Review[]
+}
+
+// Saved Courses: User bookmarks
+model SavedCourse {
+  id       String @id @default(cuid())
+  userId   String
+  user     User   @relation(fields: [userId], references: [id], onDelete: Cascade)
+  courseId String
+  course   Course @relation(fields: [courseId], references: [id], onDelete: Cascade)
+
+  createdAt DateTime @default(now())
+
+  @@unique([userId, courseId])
+  @@index([userId])
+}
+
+// Transcript: Encrypted/Private user history for GPA Prediction
+model StudentCourseHistory {
+  id         String @id @default(cuid())
+  userId     String
+  user       User   @relation(fields: [userId], references: [id], onDelete: Cascade)
+  courseCode String // Store code string to survive catalog changes
+  term       String
+  grade      Grade
+  credits    Int
+
+  createdAt DateTime @default(now())
+
+  @@index([userId])
+}

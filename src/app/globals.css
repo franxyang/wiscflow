@@ -1,15 +1,25 @@
+@import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap');
 @import "tailwindcss";
 
 :root {
   --background: #ffffff;
   --foreground: #171717;
+
+  /* UW Madison Brand Colors */
+  --uw-red: #c5050c;
+  --uw-dark: #9b0000;
+  --uw-light: #d93036;
+  --uw-subtle: #fef2f2;
 }
 
 @theme inline {
   --color-background: var(--background);
   --color-foreground: var(--foreground);
-  --font-sans: var(--font-geist-sans);
-  --font-mono: var(--font-geist-mono);
+  --color-uw-red: var(--uw-red);
+  --color-uw-dark: var(--uw-dark);
+  --color-uw-light: var(--uw-light);
+  --color-uw-subtle: var(--uw-subtle);
+  --font-sans: 'Inter', system-ui, sans-serif;
 }
 
 @media (prefers-color-scheme: dark) {
@@ -22,5 +32,71 @@
 body {
   background: var(--background);
   color: var(--foreground);
-  font-family: Arial, Helvetica, sans-serif;
+  font-family: 'Inter', system-ui, sans-serif;
 }
+
+/* Custom Scrollbar */
+.custom-scrollbar::-webkit-scrollbar {
+  width: 6px;
+}
+
+.custom-scrollbar::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+.custom-scrollbar::-webkit-scrollbar-thumb {
+  background: #cbd5e1;
+  border-radius: 3px;
+}
+
+.custom-scrollbar::-webkit-scrollbar-thumb:hover {
+  background: #94a3b8;
+}
+
+/* Animations */
+@keyframes slide-in {
+  from {
+    opacity: 0;
+    transform: translateY(10px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+@keyframes fade-in {
+  from {
+    opacity: 0;
+  }
+  to {
+    opacity: 1;
+  }
+}
+
+.animate-slide-in {
+  animation: slide-in 0.3s ease-out forwards;
+}
+
+.animate-fade-in {
+  animation: fade-in 0.2s ease-out forwards;
+}
+
+/* UW Red Button Utilities */
+.btn-uw-red {
+  background-color: var(--uw-red);
+  color: white;
+}
+
+.btn-uw-red:hover {
+  background-color: var(--uw-dark);
+}
+
+/* Grade color utilities for dynamic styling */
+.grade-a { --grade-color: #22c55e; }
+.grade-ab { --grade-color: #4ade80; }
+.grade-b { --grade-color: #3b82f6; }
+.grade-bc { --grade-color: #60a5fa; }
+.grade-c { --grade-color: #facc15; }
+.grade-d { --grade-color: #fb923c; }
+.grade-f { --grade-color: #ef4444; }
